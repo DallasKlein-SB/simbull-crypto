@@ -9,13 +9,13 @@ contract LeagueFactory {
     event LeagueCreated(address leagueAddress); //each new league gets an event emitted
 
     //--Variables----------------------------------------
-    uint256[] public league_ids;                   //All league contract addresses
-    mapping(uint256 => address) public leagues;    //Mapping league ids to their contract address
-    address public owner;                          //creator of the league factory
+    uint256[] public league_ids;                   //All league contract addresses //@audit an address array is enough
+    mapping(uint256 => address) public leagues;    //Mapping league ids to their contract address //@audit cf supra
+    address public owner;                          //creator of the league factory //@audit rm unused var
 
     //--Constructor--------------------------------------
     constructor() {
-        owner = msg.sender; //saves the creator
+        owner = msg.sender; //saves the creator //@audit unused
     }
 
 
@@ -47,7 +47,7 @@ contract LeagueFactory {
             _treasury_token
         );
 
-        address _thisAddress = address(_leagueContract); //saves address on new league
+        address _thisAddress = address(_leagueContract); //saves address on new league //@audit rm unneeded var (cast _leagueContract to address instead)
         leagues[_league_id] = _thisAddress;              //adds to the league directory map
         league_ids.push(_league_id);                     //save the id in the array
 
@@ -59,7 +59,7 @@ contract LeagueFactory {
     //---------------------------------------------------
     //--GETTERS------------------------------------------
     //---------------------------------------------------
-    
+     //@audit use OZ address set (.at() and .contains()) - https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/structs/EnumerableSet.sol
     //Get League Address By ID
     /*function getLeagueAddressById(uint256 _id) public view returns(address) {
         return leagues[_id];

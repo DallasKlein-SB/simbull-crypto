@@ -13,9 +13,9 @@ contract SeasonFactory {
     //---------------------------------------------------
 
     uint256[] private season_ids;                //all seasons ids
-    mapping(uint256 => address) private seasons; //mapping ids to addresses
+    mapping(uint256 => address) private seasons; //mapping ids to addresses //@audit replace both by an address array
     address private league_factory;
-    address private owner;
+    address private owner; //@audit OZ ownable
 
 
     //---------------------------------------------------
@@ -49,8 +49,8 @@ contract SeasonFactory {
         //create the season
         SingleSeason _seasonContract = new SingleSeason(_name, _season_id, msg.sender, _owner);
         //save the seasons address in the seasons array
-        address _thisAddress = address(_seasonContract);
-        seasons[_season_id] = _thisAddress;
+        address _thisAddress = address(_seasonContract); //@audit rm unused var (cast line above)
+        seasons[_season_id] = _thisAddress; //@audit use a single array of addresses
         //add the season id to the array
         season_ids.push(_season_id);
         return _thisAddress;
@@ -61,11 +61,11 @@ contract SeasonFactory {
     //--GETTERS------------------------------------------
     //---------------------------------------------------
 
-    function getAmountOfSeasons() public view returns (uint256) {
+    function getAmountOfSeasons() public view returns (uint256) { //@audit use a public variable instead
         return season_ids.length;
     }
 
-    function getSeasonAddress(uint256 _season_id) public view returns (address) {
+    function getSeasonAddress(uint256 _season_id) public view returns (address) { //@audit use a public variable instead
         return seasons[_season_id];
     }
 
@@ -74,7 +74,7 @@ contract SeasonFactory {
     //---------------------------------------------------
 
     //setLeague_factory - Sets the address of the League Factory
-    function setLeague_factory(address _league_factory) public {
+    function setLeague_factory(address _league_factory) public { //@audit event?
         require(owner == msg.sender, "Must be contract owner");
         league_factory = _league_factory;
     }
