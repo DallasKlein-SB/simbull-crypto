@@ -12,38 +12,38 @@ import {IPool} from '../FakeAave/interfaces/IPool.sol';
 
 contract League is ERC1155 {
 
-    using SafeMath for uint;
+    using SafeMath for uint; //@audit solc 0.8+
 
     //---------------------------------------------------
     //--Events-------------------------------------------
     //---------------------------------------------------
 
-    event SeasonCreated(address seasonAddress);
+    event SeasonCreated(address seasonAddress); //@audit indexed?
 
     //---------------------------------------------------
     //--Variables----------------------------------------
     //---------------------------------------------------
-
+//@audit packing?
     //descriptive variables
-    string    public name;
-    string    public symbol;
-    uint256   public league_id;
-    uint256[] public teams; //array of teams
+    string    public name; //@audit immutable
+    string    public symbol; //@audit immutable
+    uint256   public league_id; //@audit immutable
+    uint256[] public teams; //array of teams //@audit as they are sequential, rather use an uint "numberOfTeams" + immutable
     address   public owner; //who created this league, not League Factory
     //variables
     uint256   public totalDeposited; //all time total deposited
     uint256   public totalWithdrawn; //all time total withdrawn
-    uint256   public totalCurrentSupply; //current token sets outstanding
-    uint256   public exchangeRate; //amount of erc20 needed to mint/burn a single token set
-    uint256   public num_of_seasons; //how many seasons can be created from the SeasonFactory
+    uint256   public totalCurrentSupply; //current token sets outstanding //@audit same as totaldeposit-totalwithdrawn?
+    uint256   public exchangeRate; //amount of erc20 needed to mint/burn a single token set //@audit immutable
+    uint256   public num_of_seasons; //how many seasons can be created from the SeasonFactory //@audit immutable
     uint256   public mintFee; //fee put in win payout pool when minitng
     uint256   public burnFee; //fee put in win payout pool when burning
     bool      public canBurn; //ability to burn token sets for the exchangeRate of erc20 tokens
     //contract addresses
-    address   public erc20_address; //address of token used for the League Treasury
+    address   public erc20_address; //address of token used for the League Treasury //@audit immutable
     address   public pool_proxy_polygon = 0x6C9fB0D5bD9429eb9Cd96B85B81d872281771E6B; //main aave pool address
     address   public aToken_erc20_address; //address of atoken used for the League Treasury
-    address   public contract_address;
+    address   public contract_address; //@audit what is this for? address(this)? Not initialized + immutable
     //season win payout info
     enum SeasonStatus { ACTIVE, INACTIVE, COLLECTING }
     address[] seasons;
@@ -55,8 +55,8 @@ contract League is ERC1155 {
     //--Constructor--------------------------------------
     //---------------------------------------------------
     constructor(
-        string[2] memory info_strings, //[name, symbol]
-        uint256[3] memory info_uint256, //[numOfTeams, exchangeRate, num_of_seasons]
+        string[2] memory info_strings, //[name, symbol] //@audit If the array is to save on calldata size, this is the opposite effect (better use indep args or struct) + calldata instead of memory
+        uint256[3] memory info_uint256, //[numOfTeams, exchangeRate, num_of_seasons] //@audit same
         uint256 _league_id, //league_id
         address _owner,
         address _treasury_token //erc20 token used to mint/burn
@@ -71,13 +71,13 @@ contract League is ERC1155 {
         }
         owner = _owner;
         //variables
-        totalDeposited = 0;
-        totalWithdrawn = 0;
-        totalCurrentSupply = 0;
+        totalDeposited = 0; //@audit don't init default values
+        totalWithdrawn = 0; //@audit don't init default values
+        totalCurrentSupply = 0; //@audit don't init default values
         exchangeRate = info_uint256[1];
         num_of_seasons = info_uint256[2];
-        mintFee = 0; // mintFee / 10000 --> mintFee of 100 will be a fee of 1%, mintFee of 10 will be a fee of 0.1% 
-        burnFee = 0; // burnFee / 10000 --> burnFee of 100 will be a fee of 1%, burnFee of 10 will be a fee of 0.1% 
+        mintFee = 0; // mintFee / 10000 --> mintFee of 100 will be a fee of 1%, mintFee of 10 will be a fee of 0.1% //@audit don't init default values
+        burnFee = 0; // burnFee / 10000 --> burnFee of 100 will be a fee of 1%, burnFee of 10 will be a fee of 0.1% //@audit don't init default values
         canBurn = true; //a league can toggle on and off the burning capabilites
         //addresses
         erc20_address = _treasury_token;
@@ -87,12 +87,12 @@ contract League is ERC1155 {
     //--Modifiers----------------------------------------
     //---------------------------------------------------
 
-    modifier isLeagueOwner() {
+    modifier isLeagueOwner() { //@audit suggest using OZ ownable for standardization, which is the same tho
         require(msg.sender == owner, "Not owner");
         _;
     }
 
-    modifier noActiveSeasons() {
+    modifier noActiveSeasons() { //@audit only used once?
         require(!hasActiveLeague(), "Has an active season");
         _;
     }
@@ -102,12 +102,12 @@ contract League is ERC1155 {
     //---------------------------------------------------
 
     //Mint Team Tokens
-    function mintBatch(uint256 _amount) public payable returns(bool) {
+    function mintBatch(uint256 _amount) public payable returns(bool) { //@audit payable for? ETH isn't handled at all, would be stuck here (for gas optim, this one is borderline)
 
         //--DIRECTIONS
 
         // 1. Check Balance of ERC20 is greater than amount used to mint
-        // 2. Check that this smart contract has enough allowance of the minters ERC20 to transfer
+        // 2. Check that this smart contract has enough allowance of the minters ERC20 to transfer  //@audit 2 first steps not needed/double check (see transferFrom)
         // 3. Transfer the Amount of ERC20 tokens from the minter to the contract
         // 4. Create an Amount Array needed for the _mintBatch function using getExchangeRate()
         // 5. Mint Batch
@@ -126,12 +126,12 @@ contract League is ERC1155 {
         uint256 size = teams.length;
         uint256[] memory amounts = new uint[](size);
         uint256 exchangeAmount = _amount / exchangeRate * (10000 - mintFee) / 10000;
-        for(uint256 i = 0; i < size; i++){
+        for(uint256 i = 0; i < size; i++){ //@audit this loop could be used to populate an array with the teams too (see the comment on the unneeded teams array)
             amounts[i] = exchangeAmount;
         }
 
         // 5. Mint Batch
-        _mintBatch(msg.sender, teams, amounts, "");
+        _mintBatch(msg.sender, teams, amounts, ""); //@audit _mintBatch trigger the onERC1155BatchReceived, reentrancy here (follow CEI, mint as last step)
 
         // 6. Update Variables - totalDeposited, totalCurrentlySupply
         totalDeposited = totalDeposited + _amount;
@@ -139,7 +139,7 @@ contract League is ERC1155 {
 
         // 7. Approve Aave and Send ERC20 tokens to Aave
         IERC20(erc20_address).approve(pool_proxy_polygon, _amount);
-        IPool(pool_proxy_polygon).supply(erc20_address, _amount, address(this), 0);
+        IPool(pool_proxy_polygon).supply(erc20_address, _amount, address(this), 0);  //@audit could be supplied from msg.sender instead of transfering to this contract first
 
         // 8. Return true to indicate successful mint
         return true;
@@ -162,9 +162,9 @@ contract League is ERC1155 {
         //--IMPLEMENTATION
 
         // 0. Burning must be enabled for this league
-        require(canBurn, "This league doesn't have burning enabled.");
+        require(canBurn, "This league doesn't have burning enabled."); //@audit 41 bytes -> reduce >= 32 bytes
         // 3. Check that this smart contract has enough allowance of the burners team tokens to transfer
-        require(isApprovedForAll(msg.sender, address(this)), "Don't have approval to burn tokens");
+        require(isApprovedForAll(msg.sender, address(this)), "Don't have approval to burn tokens"); //@audit unneeded check
         // 1. Create Addresses and Amounts Array to use _burnBatch function using getExchangeRate() and getBurnFee()
         uint256 size = teams.length;
         uint256[] memory amounts = new uint[](size);
@@ -172,7 +172,7 @@ contract League is ERC1155 {
         for(uint256 i = 0; i < size; i++){
             amounts[i] = _amount;
             // 2. Check Balance of each team tokens is greater than amount used to burn
-            require(balanceOf(msg.sender, i) >= _amount, "Don't have enough balance of a token");
+            require(balanceOf(msg.sender, i) >= _amount, "Don't have enough balance of a token"); //@audit checked in erc1155
         }
         // 4. Update Variables - totalWithdrawn, totalCurrentSupply
         totalWithdrawn = totalWithdrawn + exchangeAmount;
@@ -209,7 +209,7 @@ contract League is ERC1155 {
         require(seasonStatus[_season] == SeasonStatus.ACTIVE, "Not an active season");
         // 2. Set Win Payout Amount
         if (num_of_seasons != 0) {
-            winPayoutAmt[_season] = SafeMath.div(SafeMath.div(getCurrentERC20Value(),  SingleSeason(_season).totalWinPayouts()), num_of_seasons);
+            winPayoutAmt[_season] = SafeMath.div(SafeMath.div(getCurrentERC20Value(),  SingleSeason(_season).totalWinPayouts()), num_of_seasons); //@audit safemath div only prevent div by 0, which would revert anyway (solc0.8)
         } else {
             winPayoutAmt[_season] = SafeMath.div(SafeMath.sub(getCurrentERC20Value(), getCurrentDeposited()),  SingleSeason(_season).totalWinPayouts());
         }
