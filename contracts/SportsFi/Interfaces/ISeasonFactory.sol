@@ -2,5 +2,5 @@
 pragma solidity ^0.8.4;
 
 interface ISeasonFactory {
-    function createNewSeason(string calldata, address, uint256) external returns (address); 
+    function createNewSeason(string calldata, address) external returns (address); 
 }

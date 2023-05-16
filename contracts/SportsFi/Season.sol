@@ -11,10 +11,9 @@ contract SingleSeason is ERC1155, ERC1155Burnable {
     //---------------------------------------------------
 
     string public name;
-    uint256 public season_id;
-    address public league_contract;
-    address public owner;
-    uint256[] public token_ids;
+    address immutable public league_contract;
+    address immutable public owner;
+    uint256 public token_ids;
     uint256 public payoutExchangeRate; //win payout to one ERC20 token
     uint256 public totalWinPayouts;
     enum SeasonStatus { ACTIVE, INACTIVE, COLLECTING }
@@ -32,15 +31,12 @@ contract SingleSeason is ERC1155, ERC1155Burnable {
 
     constructor(
         string memory _name,
-        uint256 _season_id,
         address _league_contract,
         address _owner
     ) ERC1155("_a_uri_here_with_reference_to_each_game") {
         name = _name;
-        season_id = _season_id;
         league_contract = _league_contract;
         owner = _owner;
-        totalWinPayouts = 0;
         status = SeasonStatus.ACTIVE;
     }
 
@@ -63,10 +59,11 @@ contract SingleSeason is ERC1155, ERC1155Burnable {
     //---------------------------------------------------
 
     function proposeWinPayout(WinPayout[] calldata _win_payouts) public onlyOwner returns (uint256) {
-        require(status == SeasonStatus.ACTIVE, "Can't make new payouts for non-active seasons.");
-        uint256 gameId = token_ids.length;
-        token_ids.push(gameId);
-        for (uint256 i = 0; i < _win_payouts.length; i++) {
+        require(status == SeasonStatus.ACTIVE, "Non-active season.");
+        uint256 gameId = token_ids;
+        token_ids++;
+        uint256 _numberOfWinners = _win_payouts.length;
+        for (uint256 i = 0; i < _numberOfWinners; i++) {
             uint256 amount = _win_payouts[i].amount;
             //increment totalWinPayouts
             totalWinPayouts += amount;

@@ -12,10 +12,9 @@ contract SeasonFactory {
     //--Variables----------------------------------------
     //---------------------------------------------------
 
-    uint256[] private season_ids;                //all seasons ids
-    mapping(uint256 => address) private seasons; //mapping ids to addresses
-    address private league_factory;
-    address private owner;
+    address[] public seasons;                //all seasons ids
+    address public league_factory;
+    address immutable public owner;
 
 
     //---------------------------------------------------
@@ -34,39 +33,21 @@ contract SeasonFactory {
 
     function createNewSeason(
         string calldata _name, //name of season
-        address _owner,        //league owner, comes from owner of the League
-        uint256 _league_id     //league id with ownership
+        address _owner       //league owner, comes from owner of the League
+        
     )
         public returns (address)
     {
-        //is this coming from a league contract?
+        //is this coming from a league contract? --> Don't think this is necessary because of it's just and empty season essentially then? Nothing bad can happen
         //require(ILeagueFactory(league_factory).checkLeagueById(_league_id, msg.sender), "Not a valid league");
-        require(LeagueFactory(league_factory).leagues(_league_id) == msg.sender, "Not a valid league");
+        require(LeagueFactory(league_factory).checkLeagueByAddress(msg.sender), "Not a valid league");
 
         //create
-        //get new season id by incrementing season_ids
-        uint256 _season_id = season_ids.length;
         //create the season
-        SingleSeason _seasonContract = new SingleSeason(_name, _season_id, msg.sender, _owner);
-        //save the seasons address in the seasons array
-        address _thisAddress = address(_seasonContract);
-        seasons[_season_id] = _thisAddress;
+        address _thisAddress = address(new SingleSeason(_name, msg.sender, _owner));
         //add the season id to the array
-        season_ids.push(_season_id);
+        seasons.push(_thisAddress);
         return _thisAddress;
-    }
-
-
-    //---------------------------------------------------
-    //--GETTERS------------------------------------------
-    //---------------------------------------------------
-
-    function getAmountOfSeasons() public view returns (uint256) {
-        return season_ids.length;
-    }
-
-    function getSeasonAddress(uint256 _season_id) public view returns (address) {
-        return seasons[_season_id];
     }
 
     //---------------------------------------------------

@@ -206,9 +206,9 @@ async function main() {
 
   // 7. Propose Win Payout 2 for Season1
   const WinPayout2Array = [
-    { teamOwner: addr1.address, amount: 1, },
-    { teamOwner: addr2.address, amount: 2, },
-    { teamOwner: addr3.address, amount: 3, },
+    { teamOwner: addr1.address, amount: 2, },
+    { teamOwner: addr2.address, amount: 4, },
+    { teamOwner: addr3.address, amount: 6, },
   ];
 
   const proposeWinPayout2 = await Season1Contract.proposeWinPayout(WinPayout2Array);

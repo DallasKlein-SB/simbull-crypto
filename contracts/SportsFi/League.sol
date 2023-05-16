@@ -4,7 +4,6 @@ pragma solidity ^0.8.4;
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {ISeasonFactory} from "./Interfaces/ISeasonFactory.sol";
 import {ISeason} from "./Interfaces/ISeason.sol";
 import {SingleSeason} from "./Season.sol";
@@ -12,13 +11,11 @@ import {IPool} from '../FakeAave/interfaces/IPool.sol';
 
 contract League is ERC1155 {
 
-    using SafeMath for uint;
-
     //---------------------------------------------------
     //--Events-------------------------------------------
     //---------------------------------------------------
 
-    event SeasonCreated(address seasonAddress);
+    event SeasonCreated(address indexed seasonAddress);
 
     //---------------------------------------------------
     //--Variables----------------------------------------
@@ -27,23 +24,22 @@ contract League is ERC1155 {
     //descriptive variables
     string    public name;
     string    public symbol;
-    uint256   public league_id;
-    uint256[] public teams; //array of teams
-    address   public owner; //who created this league, not League Factory
+    uint256   immutable public league_id;
+    uint256   public teams; //array of teams
+    address   immutable public owner; //who created this league, not League Factory
     //variables
     uint256   public totalDeposited; //all time total deposited
     uint256   public totalWithdrawn; //all time total withdrawn
     uint256   public totalCurrentSupply; //current token sets outstanding
-    uint256   public exchangeRate; //amount of erc20 needed to mint/burn a single token set
-    uint256   public num_of_seasons; //how many seasons can be created from the SeasonFactory
-    uint256   public mintFee; //fee put in win payout pool when minitng
-    uint256   public burnFee; //fee put in win payout pool when burning
-    bool      public canBurn; //ability to burn token sets for the exchangeRate of erc20 tokens
+    uint256   immutable public exchangeRate; //amount of erc20 needed to mint/burn a single token set
+    uint256   immutable public num_of_seasons; //how many seasons can be created from the SeasonFactory
+    uint256   public mintFee; //fee put in win payout pool when minitng // mintFee / 10000 --> mintFee of 100 will be a fee of 1%, mintFee of 10 will be a fee of 0.1% 
+    uint256   public burnFee; //fee put in win payout pool when burning // burnFee / 10000 --> burnFee of 100 will be a fee of 1%, burnFee of 10 will be a fee of 0.1% 
+    bool      public canBurn = true; //ability to burn token sets for the exchangeRate of erc20 tokens
     //contract addresses
-    address   public erc20_address; //address of token used for the League Treasury
+    address   immutable public erc20_address; //address of token used for the League Treasury
     address   public pool_proxy_polygon = 0x6C9fB0D5bD9429eb9Cd96B85B81d872281771E6B; //main aave pool address
     address   public aToken_erc20_address; //address of atoken used for the League Treasury
-    address   public contract_address;
     //season win payout info
     enum SeasonStatus { ACTIVE, INACTIVE, COLLECTING }
     address[] seasons;
@@ -66,19 +62,11 @@ contract League is ERC1155 {
         symbol = info_strings[1];
         //description = info_strings[2];
         league_id = _league_id;
-        for(uint256 i = 0; i < info_uint256[0]; i++){
-            teams.push(i);
-        }
+        teams = info_uint256[0];
         owner = _owner;
         //variables
-        totalDeposited = 0;
-        totalWithdrawn = 0;
-        totalCurrentSupply = 0;
         exchangeRate = info_uint256[1];
         num_of_seasons = info_uint256[2];
-        mintFee = 0; // mintFee / 10000 --> mintFee of 100 will be a fee of 1%, mintFee of 10 will be a fee of 0.1% 
-        burnFee = 0; // burnFee / 10000 --> burnFee of 100 will be a fee of 1%, burnFee of 10 will be a fee of 0.1% 
-        canBurn = true; //a league can toggle on and off the burning capabilites
         //addresses
         erc20_address = _treasury_token;
     }
@@ -92,17 +80,12 @@ contract League is ERC1155 {
         _;
     }
 
-    modifier noActiveSeasons() {
-        require(!hasActiveLeague(), "Has an active season");
-        _;
-    }
-
     //---------------------------------------------------
     //--Core Functions-----------------------------------
     //---------------------------------------------------
 
     //Mint Team Tokens
-    function mintBatch(uint256 _amount) public payable returns(bool) {
+    function mintBatch(uint256 _amount) public returns(bool) {
 
         //--DIRECTIONS
 
@@ -110,43 +93,44 @@ contract League is ERC1155 {
         // 2. Check that this smart contract has enough allowance of the minters ERC20 to transfer
         // 3. Transfer the Amount of ERC20 tokens from the minter to the contract
         // 4. Create an Amount Array needed for the _mintBatch function using getExchangeRate()
-        // 5. Mint Batch
-        // 6. Update Variables - totalDeposited, totalCurrentlySupply
-        // 7. Send ERC20 tokens to Aave
+        // 5. Update Variables - totalDeposited, totalCurrentlySupply
+        // 6. Send ERC20 tokens to Aave
+        // 7. Mint Batch
         // 8. Return true to indicate successful mint
 
         //--IMPLEMENTATION
         // 1. Check Balance of ERC20 is greater than amount used to mint
-        require(IERC20(erc20_address).balanceOf(msg.sender) >= _amount, "Not enough balance of this token");
+        //require(IERC20(erc20_address).balanceOf(msg.sender) >= _amount, "Not enough balance of this token");
         // 2. Check that this smart contract has enough allowance of the minters ERC20 to transfer
-        require(IERC20(erc20_address).allowance(msg.sender, address(this)) >= _amount, "Not enough allowance of this token");        
+        //require(IERC20(erc20_address).allowance(msg.sender, address(this)) >= _amount, "Not enough allowance of this token");        
         // 3. Transfer the Amount of ERC20 tokens from the minter to the contract
         IERC20(erc20_address).transferFrom(msg.sender, address(this), _amount);
         // 4. Create an Amount Array needed for the _mintBatch function using getExchangeRate()
-        uint256 size = teams.length;
-        uint256[] memory amounts = new uint[](size);
+        uint256[] memory amounts = new uint[](teams);
+        uint256[] memory teamsArr = new uint[](teams);
         uint256 exchangeAmount = _amount / exchangeRate * (10000 - mintFee) / 10000;
-        for(uint256 i = 0; i < size; i++){
+        for(uint256 i = 0; i < teams; i++){
             amounts[i] = exchangeAmount;
+            teamsArr[i] = i;
         }
 
-        // 5. Mint Batch
-        _mintBatch(msg.sender, teams, amounts, "");
-
-        // 6. Update Variables - totalDeposited, totalCurrentlySupply
+        // 5. Update Variables - totalDeposited, totalCurrentlySupply
         totalDeposited = totalDeposited + _amount;
         totalCurrentSupply = totalCurrentSupply + exchangeAmount;
 
-        // 7. Approve Aave and Send ERC20 tokens to Aave
+        // 6. Approve Aave and Send ERC20 tokens to Aave
         IERC20(erc20_address).approve(pool_proxy_polygon, _amount);
         IPool(pool_proxy_polygon).supply(erc20_address, _amount, address(this), 0);
+
+        // 7. Mint Batch
+        _mintBatch(msg.sender, teamsArr, amounts, "");
 
         // 8. Return true to indicate successful mint
         return true;
     }
         
     //Burn Team Tokens
-    function burnBatch(uint256 _amount) public /*payable*/ returns(bool) {
+    function burnBatch(uint256 _amount) public returns(bool) {
 
         //--DIRECTIONS
 
@@ -162,23 +146,24 @@ contract League is ERC1155 {
         //--IMPLEMENTATION
 
         // 0. Burning must be enabled for this league
-        require(canBurn, "This league doesn't have burning enabled.");
+        require(canBurn, "No burning.");
         // 3. Check that this smart contract has enough allowance of the burners team tokens to transfer
-        require(isApprovedForAll(msg.sender, address(this)), "Don't have approval to burn tokens");
+        //require(isApprovedForAll(msg.sender, address(this)), "Don't have approval to burn tokens");
         // 1. Create Addresses and Amounts Array to use _burnBatch function using getExchangeRate() and getBurnFee()
-        uint256 size = teams.length;
-        uint256[] memory amounts = new uint[](size);
+        uint256[] memory amounts = new uint[](teams);
+        uint256[] memory teamsArr = new uint[](teams);
         uint256 exchangeAmount = _amount * exchangeRate * (10000 - burnFee) / 10000;
-        for(uint256 i = 0; i < size; i++){
+        for(uint256 i = 0; i < teams; i++){
             amounts[i] = _amount;
+            teamsArr[i] = i;
             // 2. Check Balance of each team tokens is greater than amount used to burn
-            require(balanceOf(msg.sender, i) >= _amount, "Don't have enough balance of a token");
+            //require(balanceOf(msg.sender, i) >= _amount, "Don't have enough balance of a token");
         }
         // 4. Update Variables - totalWithdrawn, totalCurrentSupply
         totalWithdrawn = totalWithdrawn + exchangeAmount;
         totalCurrentSupply = totalCurrentSupply - _amount;
         // 5. Burn Batch
-        _burnBatch(msg.sender, teams, amounts);
+        _burnBatch(msg.sender, teamsArr, amounts);
         // 6. Withdraw ERC20 tokens from Aave and send exchangeAmount to burner
         IPool(pool_proxy_polygon).withdraw(erc20_address, exchangeAmount, msg.sender);
         // 7. Return true to indicate successful burn
@@ -186,8 +171,9 @@ contract League is ERC1155 {
     }
 
     //Create New Season
-    function createNewSeason(string calldata _name, address _season_factory_address) public isLeagueOwner noActiveSeasons returns(address) {
-        address season_address = ISeasonFactory(_season_factory_address).createNewSeason(_name, owner, league_id);
+    function createNewSeason(string calldata _name, address _season_factory_address) public isLeagueOwner returns(address) {
+        require(!hasActiveLeague(), "Has an active season");
+        address season_address = ISeasonFactory(_season_factory_address).createNewSeason(_name, owner);
         emit SeasonCreated(season_address);
         seasons.push(season_address);
         seasonStatus[season_address] = SeasonStatus.ACTIVE;
@@ -209,9 +195,9 @@ contract League is ERC1155 {
         require(seasonStatus[_season] == SeasonStatus.ACTIVE, "Not an active season");
         // 2. Set Win Payout Amount
         if (num_of_seasons != 0) {
-            winPayoutAmt[_season] = SafeMath.div(SafeMath.div(getCurrentERC20Value(),  SingleSeason(_season).totalWinPayouts()), num_of_seasons);
+            winPayoutAmt[_season] = (getCurrentERC20Value() / SingleSeason(_season).totalWinPayouts()) / num_of_seasons;
         } else {
-            winPayoutAmt[_season] = SafeMath.div(SafeMath.sub(getCurrentERC20Value(), getCurrentDeposited()),  SingleSeason(_season).totalWinPayouts());
+            winPayoutAmt[_season] = (getCurrentERC20Value() - getCurrentDeposited()) / SingleSeason(_season).totalWinPayouts();
         }
         // 3. Put SeasonStatus to Collecting in League Contract
         seasonStatus[_season] = SeasonStatus.COLLECTING;
@@ -230,9 +216,9 @@ contract League is ERC1155 {
 
         //--IMPLEMENTATION
         // 1. Is this season status for this season contract collecting?
-        require(seasonStatus[_season_contract] == SeasonStatus.COLLECTING, "Can't redeem win payouts at this time.");
+        require(seasonStatus[_season_contract] == SeasonStatus.COLLECTING, "Not collecting");
         // 2. Require Approval for season contract tokens
-        require(ERC1155(_season_contract).isApprovedForAll(msg.sender, address(this)), "Don't have approval to burn win payouts");
+        //require(ERC1155(_season_contract).isApprovedForAll(msg.sender, address(this)), "No approval");
         // 3. Burn the Win Payout tokens
         ISeason(_season_contract).burnBatch(msg.sender, _token_ids, _amounts);
         // 4. Send back the correct amount of erc20 based on the winPayoutAmt mapping by withdrawing from Aave to msg.sender
@@ -285,7 +271,7 @@ contract League is ERC1155 {
 
     //DESCRIPTIVE VARIABLES
     //setTeams - Sets the Teams of the League
-    function setTeams(uint256[] calldata _teams) public isLeagueOwner {
+    function setTeams(uint256 _teams) public isLeagueOwner {
         teams = _teams;
     }
 
